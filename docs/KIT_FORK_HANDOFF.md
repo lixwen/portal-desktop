@@ -26,3 +26,9 @@ This publication does not rebuild Rust runtimes, sign an installer, run native E
 ## Local development startup (2026-11-05)
 
 `npm start` was verified with the reviewed frozen macOS Portal/Installer pair, an isolated client profile and the DEV Home URL. The actual Electron main window rendered. Vite keeps `ws` external so Node preserves its optional native-module fallback instead of failing during startup on missing `bufferutil`. This startup check does not authenticate a Home session or repeat Heart business acceptance; the normal installed client remains independent.
+
+## Per-Being execution ownership
+
+Independent Desktop profiles do not allow two Portal engines to execute for the same relay/Being at once. The engine enforces a shared single-instance lock. Background readiness now surfaces the candidate's existing redacted conflict message promptly instead of reporting only a generic readiness timeout; it does not stop another owner's service. Runtime-update, takeover and background regressions passed 67 scenarios, and TypeScript checking passed.
+
+During the local test, the user explicitly chose to switch execution to the Kit client. The normal client's Stop action released its Portal while retaining its window, login and data; the test client's Start action then produced a valid readiness file and a connected relay state. Unsaved settings were not overwritten. This check did not replay business tool calls.

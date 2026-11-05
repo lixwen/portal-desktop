@@ -276,3 +276,18 @@ it('does not resurrect independent runtimes from an old interrupted migration jo
   expect(f.background.installedService).toBeNull();
   expect(await readFile(f.previous.configPath!, 'utf8')).toBe(f.original);
 });
+
+it('reports an early Being lock conflict without waiting for readiness or stopping another service', async () => {
+  const f = await fixture();
+  f.background.state = { ...f.background.state, enabled: true, running: false, pid: undefined };
+  vi.spyOn(f.background, 'refresh').mockResolvedValue(f.background.state);
+  await writeFile(path.join(f.previous.root, 'portal.err.log'), 'Error: another Portal instance is already running for this relay/Being\n');
+  const disable = vi.spyOn(f.background, 'disable');
+  const unload = vi.spyOn(f.background, 'unload');
+  f.calls.length = 0;
+  await expect(new RuntimeUpdater(f.profile, f.background).waitReady(f.previous)).rejects.toThrow('Being');
+  expect(f.calls).toEqual([]);
+  expect(disable).not.toHaveBeenCalled();
+  expect(unload).not.toHaveBeenCalled();
+  expect(await readFile(f.previous.configPath!, 'utf8')).toBe(f.original);
+});

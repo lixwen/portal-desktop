@@ -164,6 +164,13 @@ export class RuntimeUpdater {
     let identity = '', since = 0;
     while (Date.now() < deadline) {
       const state = await this.background.refresh();
+      if (!state.running) {
+        // The candidate can exit on the per-Being lock before writing a ready
+        // sample. Preserve its bounded, redacted conflict diagnostic instead of
+        // hiding it behind the generic 25-second readiness timeout.
+        const observed = await this.background.portalState();
+        if (observed.conflict) throw new Error(observed.message);
+      }
       const nonce = await readFile(path.join(service.root, '.portal-status-nonce'), 'utf8').catch(() => '');
       const sample = state.running && state.pid ? await readPortalSample(path.join(service.root, '.portal-connection-status.json'), state.pid, nonce.trim()) : null;
       // Cloud availability is not an installation health test.

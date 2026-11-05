@@ -66,6 +66,12 @@ Grove growth-stage filters use the public API; the default includes unmaintained
 
 Portal can refresh its Kit inventory. An installed manifest, a running process, and authorization to a third-party service are separate facts. Existing Portal installations can retain their TOML, PATH, and Kit directory; the original configuration remains authoritative. See [Architecture](desktop/ARCHITECTURE.md) and [Source provenance](UPSTREAM.md).
 
+The complete Kit market entry uses an independently configured market and Root, verifies the exact signed release and full locked closure, then presents Profile, permissions and the real Desktop SDK/capability changes before native confirmation. It invokes the bundled `kit-installer` and authenticated Portal/Desktop hosts; existing unmanaged library tools retain their directory and behavior. Original plugins require an explicit matching-content reference, and Apps require an explicit existing local association. Pure local installation does not require Home. Home-owned native hosts use a separate login and outbound authenticated channel; see [Home native setup and current acceptance boundaries](docs/KIT_HOME_NATIVE_HOST.md). See [local self-service setup and verification boundaries](docs/KIT_SELF_SERVICE.md) and [acceptance evidence](docs/KIT_LOCAL_ACCEPTANCE.md).
+
+New managed Kit support is executor-specific: macOS has verified MCP A, original Desktop Plugin B and existing-App association C; Linux currently supports MCP A only. New managed B/C on Linux and managed paths on Windows/other unaccepted platforms return unsupported before activation. Existing unmanaged plugins/App associations, supported content paths and independent native-file delivery keep their own boundaries. Linux Home MCP startup remains available when B/C is skipped. See the [managed platform matrix and historical cleanup boundary](docs/KIT_COMPATIBILITY.md).
+
+Packaging now requires the reviewed `KIT_INSTALLER_SOURCE` crate alongside the pinned Portal source. `npm run package` / `npm run make` build both binaries with their locked dependencies and verify their protocol/features and exact hashes in the runtime bundle. New Kit code cannot activate through an older host without managed admission and authenticated one-use spawn support.
+
 ## Get started
 
 ### Get the application
@@ -243,3 +249,5 @@ Thanks to Loom, Heart Portal, [Beings Town](https://beings.town/), and the [Town
 ## Standalone Web application
 
 The responsive Web app includes Being chat and Town community features without Electron or Portal. Run `npm run dev:web` for development, `npm run build:web` to build `out/web`, or `npm run package:web` to generate `out/town-web.tar.gz`. The deployment package runs with Node.js 22.12+ using `node server.mjs`, with no runtime dependency installation. See [Web deployment documentation](web/README.md) for HTTPS, proxy configuration, scene management, and browser storage details.
+
+[Kit source handoff and build prerequisites](docs/KIT_FORK_HANDOFF.md)

@@ -19,6 +19,8 @@ const binaryExists = await access(destination).then(() => true, error => {
   throw error;
 });
 if (binaryExists) {
+  const installer = path.resolve('resources', process.platform === 'win32' ? 'kit-installer.exe' : 'kit-installer');
+  try { await access(installer); } catch { await import('./build-kit-installer.mjs'); }
   try { checkPortalCapabilities(destination); }
   catch {
     console.log('Bundled Portal is incompatible with this client; rebuilding the local engine.');

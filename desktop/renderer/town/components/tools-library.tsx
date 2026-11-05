@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { TownModel, str } from '../models/town';
 import { CatalogDetail, LocalKitDetail } from './catalog';
 import { PluginCard } from '../../plugins/page';
+import { KitMarketPanel } from './kit-market';
 
 export { toolEntries } from '../models/tool-library';
 import { toolPage } from '../models/pagination';
@@ -22,6 +23,7 @@ export function ToolsLibrary({ town }: { town: TownModel }) {
     if (needsSelection) town.selectTool(entry);
   }, [entry?.key, remoteId, needsSelection, town]);
   return <>
+    <KitMarketPanel api={town.api} changed={() => town.load(true)} />
     {town.plugins?.error && <p role="alert">{town.plugins.error}</p>}
     {town.plugins?.library.problems.map(problem => <p role="alert" key={problem}>{problem}</p>)}
     {town.installedError && <p role="alert">本机 Kit：{town.installedError}</p>}

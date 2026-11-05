@@ -1,8 +1,10 @@
 import type { ChatScene } from '../../shared/types';
 import { createServer, type Server } from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, rename, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
+
+export interface AuthenticatedClientCommand { sessionId: string; rpcId: number }
 
 export interface ClientCommandRequest { endpoint: string; verb: string; args: string; sceneId?: string; scenes?: ChatScene[] }
 
@@ -10,9 +12,11 @@ export interface ClientCommandRequest { endpoint: string; verb: string; args: st
 export class ClientCommandServer {
   private server?: Server;
   private token = randomBytes(32).toString('hex');
+  private sessionId = randomUUID();
+  private rpcId = 0;
   private pending = new Set<AbortController>();
   constructor(private file: string, private currentEndpoint: () => string | undefined,
-    private execute: (request: ClientCommandRequest, signal: AbortSignal) => Promise<string>) {}
+    private execute: (request: ClientCommandRequest, signal: AbortSignal, context: AuthenticatedClientCommand) => Promise<string>) {}
 
   async start() {
     const server = createServer(async (request, response) => {
@@ -35,7 +39,7 @@ export class ClientCommandServer {
         }
         const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (!data || typeof data.verb !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/.test(data.verb) ||
-            typeof data.args !== 'string' || data.args.length > (['plugins', 'security-approve'].includes(data.verb) ? 16000 : 1024) ||
+            typeof data.args !== 'string' || data.args.length > (['plugins', 'kit-plugins', 'security-approve'].includes(data.verb) ? 16000 : 1024) ||
             (data.sceneId != null && (typeof data.sceneId !== 'string' || data.sceneId.length > 256))) {
           reply(400, { error: 'Invalid client command' }); return;
         }
@@ -48,7 +52,7 @@ export class ClientCommandServer {
         response.once('close', abort);
         try {
           const text = await Promise.race([
-            this.execute(data, controller.signal),
+            this.execute(data, controller.signal, { sessionId: this.sessionId, rpcId: ++this.rpcId }),
             new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Client command timed out')); }, data.verb === 'security-approve' ? 120000 : 8000); }),
           ]);
           if (this.currentEndpoint() !== endpoint) { reply(409, { error: 'Being connection changed' }); return; }

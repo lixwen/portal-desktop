@@ -262,6 +262,7 @@ export class AppModel extends Store {
       /* Optional preference. */
     }
     const cleanups = [
+      this.api.onMarketRelease?.(() => { if (this.startup === 'ready') this.navigate('kits'); }) || (() => {}),
       this.plugins.start(),
       this.subscribe(() => this.plugins.updateContext(hostPluginContext(this))),
       this.workspace.subscribe(() => this.plugins.updateContext(hostPluginContext(this))),
@@ -325,6 +326,7 @@ export class AppModel extends Store {
       this.theme = theme;
       this.applySnapshot(state);
       this.startup = "ready";
+      if (await this.api.hasPendingMarketRelease?.()) this.navigate('kits');
       await this.openNotification();
     } catch {
       if (revision === this.initializeRevision) this.startup = "error";

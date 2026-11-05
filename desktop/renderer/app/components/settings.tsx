@@ -10,6 +10,7 @@ import { Diagnostics } from "./diagnostics";
 import { NavigationControls } from "../../shared/components/navigation-controls";
 import { navigateTabs } from "../../shared/components/tab-navigation";
 import { MAX_CHAT_HISTORY_LIMIT, validChatHistoryLimit } from '../../../shared/chat-history';
+import { HomeSessionSettings } from './home-session';
 const settingsTabs = [
   { id: "being", label: "Being", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0" },
   { id: "portal", label: "Portal", icon: "M5 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm3 16h8m-4-4v4" },
@@ -430,6 +431,7 @@ export const ConnectionSettings = memo(function ConnectionSettings({ model, embe
             粘贴包含 token 的完整 Loom 地址，Being
             由地址确定。凭据加密保存在系统密钥库支持的本地配置中。
           </p>
+          <HomeSessionSettings api={app.api} />
           </>}
           {section !== 'being' && !app.snapshot?.settings.hasToken && <p className="field-help">
             请先连接 Being，再保存本机配置。<button type="button" className="text-button" onClick={() => app.openConnectionSettings()}>前往 Being 连接</button>

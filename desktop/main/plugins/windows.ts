@@ -22,9 +22,10 @@ export class PluginWindows {
         if (!this.entries.has(event.sender.id)) { await this.registry.close(session.token); throw new Error('窗口已关闭。'); }
         entry.tokens.add(session.token); return session;
       }
-      if (operation === 'call' || operation === 'close') {
+      if (operation === 'call' || operation === 'close' || operation === 'ready') {
         const [token, method, value] = args;
         if (!entry.tokens.has(token)) throw new Error('插件会话不属于此窗口。');
+        if (operation === 'ready') return this.registry.markReady(token);
         if (operation === 'close') { entry.tokens.delete(token); return this.registry.close(token); }
         return this.registry.call(token, method, value);
       }

@@ -239,3 +239,10 @@ Loom 与 Town 凭据分别通过系统密钥库加密保存，配对码不落盘
 纯静态 OSS 包：运行 `npm run package:web:static`，输出 `out/town-web-oss.zip`。支持设置页添加到主屏幕，默认直连真实 Town 并直接配对，无域名检测或连接预验证，见 [OSS 部署说明](web/OSS.md)。
 
 工具库现统一提供 App、Kit、Plugin 分类和“仅本机存在”筛选，Plugin 分类内可导入与管理插件。模块沿用弹窗与右侧面板，插件支持页面和资源协作侧栏。详见 [插件说明](DEVELOPER-API-SDK.md#grove-插件-sdk)。
+
+
+### 新受管 Kit 的本机平台矩阵
+
+新受管执行器按实际验收区分：macOS支持MCP A、原格式Desktop Plugin B与现有App稳定关联C；Linux当前只支持MCP A，新受管B/C在广告/登记/准备/就绪前明确unsupported。Windows/其他未支持受管平台保持原进程/私有ACL拒绝，不因通用OS enum或Electron可运行而宣称受管支持。Linux Home启动不会因跳过B/C停掉A。旧未受管插件/App、已支持的纯内容与独立原生字节交付沿原边界保留；历史Home离线且停止未证实不能报告已清理。详见[兼容矩阵与历史清理说明](docs/KIT_COMPATIBILITY.md)。
+
+[Kit source handoff and build prerequisites](docs/KIT_FORK_HANDOFF.md)

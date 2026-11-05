@@ -12,6 +12,7 @@ import { macDmgIdentifier, verifyMacSignature } from './desktop/main/updates/mac
 import pkg from './package.json';
 
 const binary = path.resolve('resources', process.platform === 'win32' ? 'heart-portal.exe' : 'heart-portal');
+const kitInstallerBinary = path.resolve('resources', process.platform === 'win32' ? 'kit-installer.exe' : 'kit-installer');
 const macLocalTest = process.env.PORTAL_DESKTOP_MAC_LOCAL_TEST === '1';
 const macIdentity = macLocalTest ? '-' : signing.identity;
 if (process.platform === 'darwin' && macLocalTest && process.env.GITHUB_REF?.startsWith('refs/tags/')) {
@@ -37,17 +38,20 @@ const config: ForgeConfig = {
     // Packager also derives macOS's display name from its executable name.
     executableName: process.platform === 'darwin' ? 'Portal Desktop' : 'portal-desktop',
     appBundleId: signing.clientIdentifier,
+    protocols: [{ name: 'Kit release selection', schemes: ['portal-kit'] }],
     ...(process.platform === 'darwin' ? {
       osxSign: macSignOptions,
       // Match Heart Portal: Developer ID + hardened runtime + timestamp;
       // notarization is deliberately deferred, with no automatic submission.
     } : {}),
     icon: path.resolve('resources/branding/app'),
-    extraResource: [binary, path.resolve('resources/HEART-PORTAL-LICENSE'), path.resolve('resources/branding'), path.resolve('resources/runtime-bundle.json')],
+    extraResource: [binary, kitInstallerBinary, path.resolve('resources/HEART-PORTAL-LICENSE'), path.resolve('resources/branding'), path.resolve('resources/runtime-bundle.json')],
   },
   hooks: {
     prePackage: async () => {
       if (!existsSync(binary)) throw new Error('Portal binary missing. Run npm run build:portal first.');
+      if (!existsSync(kitInstallerBinary)) throw new Error('Kit installer binary missing. Run node scripts/build-kit-installer.mjs first.');
+      execFileSync(process.execPath, ['scripts/runtime-bundle.mjs', '--write'], { stdio: 'inherit' });
       if (process.platform === 'darwin') execFileSync(process.execPath, ['scripts/sign-macos-runtime.mjs'], { stdio: 'inherit' });
     },
     postPackage: async (_forgeConfig, result) => {
@@ -56,6 +60,7 @@ const config: ForgeConfig = {
           const app = path.join(output, `${pkg.productName}.app`);
           await verifyMacSignature(app, signing.clientIdentifier);
           await verifyMacSignature(path.join(app, 'Contents/Resources/heart-portal'), signing.portalIdentifier);
+          await verifyMacSignature(path.join(app, 'Contents/Resources/kit-installer'), `${signing.clientIdentifier}.kit-installer`);
         }
       }
     },

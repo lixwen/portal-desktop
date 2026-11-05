@@ -44,9 +44,10 @@ export interface PluginManifest {
 export interface InstalledPlugin {
   manifest: PluginManifest;
   enabled: boolean;
-  source: { kind: 'local' | 'grove'; id?: string };
+  source: { kind: 'local' | 'grove' | 'kit'; id?: string };
   sha256: string;
   installedAt: string;
+  managed?: boolean;
   placements?: Record<string, PluginPlacement>;
   iconOverrides?: Record<string, string>;
   visibleSidebarSlots?: string[];
@@ -57,6 +58,7 @@ export interface PluginWindowInfo { id: string; view: string; command?: string; 
 export interface PluginWindowAPI {
   info(): Promise<PluginWindowInfo>;
   open(): Promise<PluginSession>;
+  ready?(token: string): Promise<void>;
   close(token: string): Promise<void>;
   call(token: string, method: string, value?: unknown): Promise<unknown>;
   action(action: PluginHostRequest['action'], value?: unknown): Promise<any>;
@@ -75,11 +77,14 @@ export interface DesktopPluginAPI {
   replyHostRequest?(id: string, value?: unknown, error?: string): Promise<void>;
   list(): Promise<PluginLibrary>;
   importLocal(): Promise<boolean>;
+  update?(id: string): Promise<boolean>;
+  restoreUpdate?(id: string): Promise<boolean>;
   installGrove(id: string): Promise<boolean>;
   setEnabled(id: string, enabled: boolean): Promise<void>;
   remove(id: string): Promise<boolean>;
   open(id: string, view: string, command?: string, slot?: string): Promise<PluginSession>;
   updateContext?(context: PluginHostContext): Promise<void>;
+  ready?(token: string): Promise<void>;
   close(token: string): Promise<void>;
   call(token: string, method: string, value?: unknown): Promise<unknown>;
   onEvent?(callback: (event: PluginEvent) => void): () => void;

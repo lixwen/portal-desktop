@@ -11,6 +11,7 @@ import { ApprovalDialogs } from './chat/approval-dialogs';
 import { permissionMode } from '../shared/security';
 import { ClientContextReader } from './chat/client-context';
 import { app, clipboard, dialog, ipcMain, net, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, type BrowserWindow, type Tray } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { DesktopNotifications } from './app/notifications';
 import { repairDevelopmentShortcut, updateNotificationShortcutIcon, windowsAppId } from './app/windows-identity';
 import { brandingPath, notificationIcon } from './app/branding';
@@ -21,6 +22,24 @@ import { clientUserData } from './app/profile';
 import type { ClientBrowser } from './browser/browser';
 import { createMainWindow } from './app/window';
 import { LocalApps } from './app/local-apps';
+import { DesktopHostFacts } from './kits/host-facts';
+import { readKitControllerConfiguration } from './kits/controller-config';
+import { NativeKitController } from './kits/native-controller';
+import { ManagedDesktopPlugins } from './kits/managed-plugins';
+import { readDesktopHostConfiguration } from './kits/desktop-host-config';
+import { NativeKitMarkets } from './kits/market-native';
+import { bootstrapKitProduct } from './kits/product-bootstrap';
+import { kitLocation } from './kits/catalog';
+import { parseKitInstallLink } from '../shared/kit-install-link';
+import { HomeClient } from './home/client';
+import { NativeHomeKitHost } from './home/kit-host';
+import { NativeHomeDesktopHosts } from './home/desktop-hosts';
+import { startHomeKitHosts } from './home/start-hosts';
+import { runInstaller as queryKitRuntime } from './kits/market-native';
+import { registerHomeIpc } from './home/ipc';
+import { DesktopKitHost } from './kits/desktop-host';
+import { DesktopControlServer } from './kits/control-server';
+import { durablePrivateJson } from './kits/durable-file';
 import { editChat } from './app/context-menu';
 import { configureLocalSession, registerLocalProtocol } from './app/protocol';
 import { createApplicationTray, installApplicationMenu } from './app/tray';
@@ -89,6 +108,8 @@ try {
   userData = path.join(os.tmpdir(), 'portal-desktop-startup');
 }
 let window: BrowserWindow | null = null;
+let pendingKitRelease = process.argv.map(parseKitInstallLink).find(Boolean) || null;
+app.on('open-url', (event, url) => { event.preventDefault(); const selection = parseKitInstallLink(url); if (selection) { pendingKitRelease = selection; showWindow(); window?.webContents.send('beings:kit-market-open'); } });
 let closePluginSessions = () => {};
 let windowReady = false;
 let browser: ClientBrowser | undefined;
@@ -96,6 +117,8 @@ let portal: PortalSupervisor;
 let proxy: ChatProxy;
 let store: SettingsStore;
 let background: BackgroundPortal;
+let homeKitHost: NativeHomeKitHost | undefined;
+let homeDesktopHosts: NativeHomeDesktopHosts | undefined;
 let kitInstaller: KitInstaller;
 let townLive: TownLive;
 let notifications: DesktopNotifications;
@@ -120,6 +143,8 @@ const exclusive = <T>(operation: () => Promise<T>): Promise<T> => {
   return next;
 };
 async function cleanupForQuit() {
+  await homeDesktopHosts?.stop();
+  await homeKitHost?.stop();
   await kitInstaller?.dispose();
   await portal.stop();
   browser?.close();
@@ -212,6 +237,10 @@ async function ready() {
   };
   store = new SettingsStore(directory, secretStorage, binary);
   let startupNotice: string | undefined;
+  let home: HomeClient | undefined;
+  try { home = new HomeClient(directory, secretStorage, url => shell.openExternal(url)); await home.load(); }
+  catch (error) { startupNotice = errorLog.report('home-session-load', error, 'Home 会话暂不可用；纯本机 Kit 与现有 Heart 连接仍可使用。'); }
+  app.once('will-quit', () => home?.cancelLogin());
   try { await store.load(); }
   catch (error) { startupNotice = errorLog.report('settings-load', error, '连接配置读取失败，请检查密钥库或连接设置。'); }
   let configCandidates: string[] = [];
@@ -284,6 +313,10 @@ async function ready() {
   townLive.restart();
   kitInstaller = new KitInstaller(downloadFetch);
   portal = new PortalSupervisor(directory);
+  let kitProduct: Awaited<ReturnType<typeof bootstrapKitProduct>> = null;
+  let kitProductUnavailable = false;
+  try { kitProduct = await bootstrapKitProduct(directory, app.isPackaged ? process.resourcesPath : path.resolve('resources'), app.isPackaged, store.connection, (await kitLocation(store.settings)).directory); }
+  catch (error) { kitProductUnavailable = true; startupNotice = errorLog.report('kit-product-bootstrap', error, 'Kit 市场暂不可用；请检查独立配置的市场 Root 与配套运行时。'); }
   portal.on('log', line => errorLog.info('portal-output', line));
   background = new BackgroundPortal(directory);
   try { await background.discover(store.settings, store.connection); }
@@ -349,9 +382,26 @@ async function ready() {
     window.show();
     return approvalDialogs.request(input);
   }, approvalGrants);
+  let managedPlugins: ManagedDesktopPlugins | undefined;
+  let managedController: ReturnType<typeof NativeKitController.lazy> | undefined;
+  let managedConfiguration: Awaited<ReturnType<typeof readKitControllerConfiguration>> = null;
+  try {
+    const config = await readKitControllerConfiguration(path.join(directory, 'kit-controller.json'));
+    if (config) {
+      const { port, controller_token, ...scope } = config;
+      const controller = NativeKitController.lazy(port, controller_token, scope);
+      try {
+        managedPlugins = new ManagedDesktopPlugins(plugins, controller, scope, path.join(directory, 'kit-plugin-bindings.json'));
+        await managedPlugins.load(); managedController = controller; managedConfiguration = config;
+      } catch (error) { controller.close(); throw error; }
+    }
+  } catch (error) { errorLog.report('kit-controller', error, '受管 Kit 暂不可用；请检查受信安装器配置。'); }
+  app.once('will-quit', () => managedPlugins?.close());
   const clientCommands = new ClientCommandServer(path.join(directory, '.portal-client.json'),
     () => store.connection?.endpoint, (request, signal) => request.verb === 'security-approve'
       ? toolApproval.request(request, signal)
+      : request.verb === 'kit-plugins'
+      ? Promise.reject(new Error('managed_plugins_require_secure_consumer_channel'))
       : request.verb === 'plugins'
       ? plugins.agentCommand(request.endpoint, request.args, request.sceneId)
       : clientContext.execute({ ...request, scenes: chatSessions?.list(request.endpoint) }));
@@ -411,6 +461,45 @@ async function ready() {
   handle('beings:plugins-host-reply', (id, value, error) => pluginWindows!.reply(id, value, error));
   handle('beings:client-startup', (enabled?: boolean) => clientStartup(app, process.platform, process.execPath, enabled));
   const localApps = new LocalApps(path.join(directory, 'local-apps.json'));
+  try {
+    const config = await readDesktopHostConfiguration(path.join(directory, 'desktop-controller.json'));
+    if (config) {
+      if (managedConfiguration && config.targets.some(t => [t.controllerToken, t.consumerToken].includes(managedConfiguration!.controller_token))) throw new Error('desktop_controller_secret_audience_conflict');
+      const adapter = (targetId: string) => targetId === managedConfiguration?.target_id ? managedPlugins : undefined;
+      const host = new DesktopKitHost(path.join(directory, 'desktop-host-state.json'), { policies: config.targets, registry: plugins, apps: localApps,
+        adapter, ledger: (target, method, params) => { if (target !== managedConfiguration?.target_id || !managedController) return Promise.reject(new Error('desktop_ledger_unavailable')); return managedController.request(method, params); },
+        openPlugin: (id, view) => pluginWindows!.open(id, view), closePlugin: id => pluginWindows?.close(id), currentEndpoint: () => store.connection?.endpoint || '' });
+      await host.load();
+      const server = new DesktopControlServer(config.targets, (peer, method, params) => host.dispatch(peer, method, params));
+      const port = await server.listen(config.port);
+      // Port-only private descriptor: consumers pin scope and credential from their own provisioning.
+      await durablePrivateJson(path.join(directory, 'desktop-control-endpoint.json'), { format_version: 1, port });
+      app.once('will-quit', () => { void server.close(); });
+    }
+  } catch (error) { errorLog.report('desktop-controller', error, 'Kit Desktop Host 暂不可用；请检查受信安装器配置。'); }
+  const kitHostFacts = new DesktopHostFacts(path.join(directory, 'kit-host-identity.json'));
+  if (home) {
+    registerHomeIpc(handle, home, store);
+    homeKitHost = new NativeHomeKitHost({ directory, resources: app.isPackaged ? process.resourcesPath : path.resolve('resources'), packaged: app.isPackaged,
+      home, facts: kitHostFacts, settings: () => store.settings, connection: () => store.connection,
+      confirm: async (message, detail) => !!window && (await dialog.showMessageBox(window, { type: 'question', title: 'Home 本机宿主', message, detail, buttons: ['取消', '启用'], defaultId: 0, cancelId: 0 })).response === 1 });
+    homeDesktopHosts = new NativeHomeDesktopHosts({ directory, home, facts: kitHostFacts, registry: plugins, apps: localApps, settings: () => store.settings, connection: () => store.connection,
+      openPlugin: (id, view) => pluginWindows!.open(id, view), closePlugin: id => pluginWindows?.close(id),
+      confirm: async (message, detail) => !!window && (await dialog.showMessageBox(window, { type: 'question', title: 'Home Kit 确认', message, detail, signal: AbortSignal.timeout(45000), buttons: ['取消', '确认'], defaultId: 0, cancelId: 0 })).response === 1,
+      ensureLegacyGate: async () => {
+        if (store.settings.portalConfigPath || !store.connection) throw new Error('home_native_gate_requires_generated_config');
+        const caps = await queryKitRuntime(store.settings.portalBinary, ['--kit-runtime-capabilities']);
+        if (!caps.features?.includes('home.native-reservations.v1')) throw new Error('home_native_legacy_gate_unsupported');
+        await takeover.run(store.connection, 'manual', replacing => startClientPortal(replacing, true));
+      } });
+  }
+  else handle('beings:home-state', () => { throw new Error('home_native_session_unavailable'); });
+  handle('beings:home-open-portal', async () => { if (!home) throw new Error('home_native_session_unavailable'); await shell.openExternal(home.state().baseUrl); });
+  const homeHostState = () => { const state = homeKitHost?.state() || { phase: 'unconfigured' as const, message: '独立 Home 登录不可用。' }; const connectedNativeExecutors = homeDesktopHosts?.state().length || 0; return { ...state, connectedNativeExecutors, message: homeDesktopHosts?.supported() === false ? `${state.message} 当前平台不支持受管插件/App；MCP 状态以上述回执为准。` : `${state.message} 插件/App 通道：${connectedNativeExecutors}/2；组件状态以 Home 回执为准。` }; };
+  handle('beings:home-kit-host-state', homeHostState);
+  handle('beings:home-kit-host-start', () => exclusive(async () => { if (!homeKitHost) throw new Error('home_native_session_unavailable'); await startHomeKitHosts(homeKitHost, homeDesktopHosts); return homeHostState(); }));
+  handle('beings:home-kit-host-stop', () => exclusive(async () => { if (!homeKitHost) throw new Error('home_native_session_unavailable'); await homeDesktopHosts?.stop(); await homeKitHost.stop(); return homeHostState(); }));
+  handle('beings:kit-host-identity', () => kitHostFacts.identity());
   handle('beings:local-apps', () => localApps.list());
   handle('beings:associate-app', (entry: unknown) => exclusive(async () => {
     const selection = await dialog.showOpenDialog(window!, { title: '关联已安装的 App', properties: ['openFile'],
@@ -692,6 +781,43 @@ async function ready() {
     open: url => browser?.open(url),
   });
   registerKitsIpc({ handle, exclusive, window: () => window, store, kitInstaller });
+  const markets = new NativeKitMarkets(path.join(directory, 'kit-markets.json'), () => JSON.stringify([directory, store.connection?.endpoint || '', store.connection?.being || '']), async (message, detail) => {
+    if (!window) return false;
+    return (await dialog.showMessageBox(window, { type: 'question', title: 'Kit 安装确认', message, detail, buttons: ['取消', '确认'], defaultId: 0, cancelId: 0 })).response === 1;
+  }, async () => {
+    if (kitProductUnavailable) throw new Error('kit_product_configuration_changed');
+    if (!kitProduct || !store.connection) return;
+    if (store.settings.portalBinary !== kitProduct.portal || store.settings.portalConfigPath) throw new Error('kit_managed_runtime_configuration_conflict');
+    try { await kitProduct.bind(); return; } catch { /* Read-only authentication probe; no business request was dispatched. */ }
+    if (!portal.managing && !background.state.running) { await portal.start(store.settings, store.connection); await portal.waitReady(); }
+    await kitProduct.bind();
+  }, async expected => {
+    if (!window) return null;
+    if (expected) {
+      const existing = (await localApps.list()).find(a => a.id === expected && a.exists);
+      if (!existing) throw new Error('desktop_app_required_stable_association_missing');
+      return (await dialog.showMessageBox(window, { type: 'question', title: '确认已有 App 关联', message: `使用 ${existing.name}？`, detail: `稳定标识：${existing.id}\n路径：${existing.path}\n安装与版本均未通过 OS 回执验证；不会复制或删除程序。`, buttons: ['取消', '使用此关联'], defaultId: 0, cancelId: 0 })).response === 1 ? existing.id : null;
+    }
+    const choice = await dialog.showOpenDialog(window, { title: '为 Kit 显式选择已安装的 App', properties: ['openFile'], ...(process.platform === 'win32' ? { filters: [{ name: '程序', extensions: ['exe'] }] } : {}) });
+    if (choice.canceled || !choice.filePaths[0]) return null;
+    const selected = choice.filePaths[0], previous = (await localApps.list()).find(a => a.path === selected && a.exists);
+    if (previous) return previous.id;
+    const id = `local-app-${randomUUID()}`; await localApps.associate({ id, name: path.basename(selected) }, selected); return id;
+  }, async (id, expectedDigest) => {
+    if (!window) return false;
+    const observed = await plugins.nativeObservation(id);
+    if (observed.installed.sha256 !== expectedDigest) throw new Error('desktop_plugin_reference_changed');
+    if (!observed.installed.enabled) throw new Error('desktop_plugin_requires_explicit_owner_enable');
+    return (await dialog.showMessageBox(window, { type: 'question', title: '复用现有原生插件', message: `为这个 Kit 引用 ${observed.installed.manifest.name}？`, detail: `稳定标识：${id}\n来源：${observed.installed.source.kind}\n确切内容摘要：${expectedDigest}\n\n仅当已验证 Kit 中的原始插件与现有内容一致时允许复用。不会复制插件或用户数据，也不会转移原所有权；卸载 Kit 保留其他引用和原插件。`, buttons: ['取消', '引用现有插件'], defaultId: 0, cancelId: 0 })).response === 1;
+  }, plan => plan.projections.length && permissionMode(store.settings.permissionMode) !== 'full-access' ? 'portal_host_requires_existing_full_access_policy' : undefined);
+  handle('beings:kit-markets', () => markets.kitMarkets());
+  handle('beings:kit-market-link', () => { const selection = pendingKitRelease; pendingKitRelease = null; return selection; });
+  handle('beings:kit-market-pending', () => !!pendingKitRelease);
+  handle('beings:kit-market-preview', selection => exclusive(() => markets.previewMarketRelease(selection)));
+  handle('beings:kit-market-confirm', ticket => exclusive(() => markets.confirmMarketRelease(ticket)));
+  handle('beings:kit-market-installations', () => markets.marketInstallations());
+  handle('beings:kit-market-recover', marketId => exclusive(() => markets.recoverMarket(marketId)));
+  handle('beings:kit-market-manage', (marketId, installationId, action) => exclusive(() => markets.manageMarketInstallation(marketId, installationId, action)));
   registerPluginsIpc({ handle, exclusive, window: () => window, registry: plugins, closeWindows: id => pluginWindows?.close(id), fetcher: downloadFetch });
   handle('beings:plugins-context', context => pluginWorkspace.update(context));
   handle('beings:model-catalog', async (input: { kind: string; route?: string; api_key?: string }) => {
@@ -756,6 +882,8 @@ async function ready() {
     // A pending grant belongs to the old workspace/connection as well as its mode.
     approvalDialogs.cancel();
     await store.save(input);
+    await homeDesktopHosts?.contextChanged();
+    await homeKitHost?.contextChanged();
     try {
       await verifyConnection();
       await takeover.run(store.connection!, 'manual', async replacing => {
@@ -1008,9 +1136,10 @@ else {
       return;
     }
     if (args.includes('--quit-for-update')) { app.quit(); return; }
+    const selection = args.map(parseKitInstallLink).find(Boolean); if (selection) { pendingKitRelease = selection; window?.webContents.send('beings:kit-market-open'); }
     showWindow();
   });
-  app.whenReady().then(ready).catch(async error => {
+  app.whenReady().then(async () => { if (app.isPackaged) app.setAsDefaultProtocolClient('portal-kit'); await ready(); }).catch(async error => {
     dialog.showErrorBox(`${CLIENT_NAME} 启动失败`, errorLog.report('client-startup', error, '客户端启动失败，请查看日志后重试。'));
     await errorLog.flush(); app.quit();
   });

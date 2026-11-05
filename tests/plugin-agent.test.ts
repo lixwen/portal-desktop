@@ -98,9 +98,9 @@ describe('generic plugin agent SDK', () => {
     await f.command({ op: 'configure', requestId: 'prefs', expectedRevision: 0, preferences: { guidance: 'One book at a time' }, note: 'User preference' });
     expect((await f.snapshot()).preferences.guidance).toBe('One book at a time');
     await expect(f.command({ op: 'configure', requestId: 'stale', expectedRevision: 0, preferences: { guidance: 'Overwritten' }, note: 'stale' })).rejects.toThrow('已更新');
-    await f.registry.remove(manifest.id);
+    const installed = (await f.registry.list()).plugins[0];
     await writeFile(path.join(f.source, 'desktop.plugin.json'), JSON.stringify({ ...manifest, capabilities: ['agent.read'] }));
-    await f.registry.install(await readPlugin(f.source), { kind: 'local' });
+    await f.registry.update(await readPlugin(f.source), installed.source, installed.sha256);
     expect((await f.command({ op: 'list' })).preferences.guidance).toContain('One book');
     await expect(f.command({ op: 'create', requestId: 'denied', data: { title: 'Denied', status: 'new' } })).rejects.toThrow('权限');
   });

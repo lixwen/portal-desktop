@@ -1,0 +1,10 @@
+.kit-market-panel{display:grid;gap:12px;padding:16px;margin:8px 0 16px;border:1px solid var(--line);border-radius:12px;max-height:54vh;overflow:auto;scrollbar-gutter:stable}
+.kit-market-panel h3,.kit-market-panel h4,.kit-market-panel p{margin:0}
+.kit-market-panel>label{display:flex;align-items:center;gap:12px;min-width:0}
+.kit-market-panel>label>input,.kit-market-panel>label>select{flex:1;min-width:0}
+.kit-market-panel>button{justify-self:start}
+.kit-market-panel [role=region]{display:grid;gap:12px;padding-top:12px;border-top:1px solid var(--line)}
+.kit-market-panel details ul{margin:8px 0;padding-left:24px;line-height:1.7;color:var(--secondary)}
+.kit-market-panel .kit-actions{flex-wrap:wrap}
+.home-session-settings{display:grid;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.home-session-settings label{display:grid;gap:6px}

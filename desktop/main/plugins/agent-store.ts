@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { durablePrivateJson } from '../kits/durable-file';
 import type { PluginAgentContract, PluginAgentMutation, PluginAgentMutationResult, PluginAgentSnapshot, PluginAgentRecord } from '../../../plugins/sdk';
 import { agentKeys, agentObject, agentRevision, agentText, validateAgentData } from '../../shared/plugin-agent';
 import { pluginId } from '../../shared/plugins';
@@ -74,10 +75,7 @@ export class PluginAgentStore {
     const result: PluginAgentMutationResult = { revision: data.revision, ...(record ? { record: structuredClone(record) } : {}), preferences: { ...data.preferences } };
     data.requests = [...data.requests, { key, hash, result }].slice(-256); data.events = data.events.slice(-2000);
     const json = JSON.stringify(data); if (Buffer.byteLength(json) > maximum) throw new Error('插件协作数据超过 4 MB，未保存。');
-    const file = this.file(id, endpoint), temp = `${file}.${randomUUID()}.tmp`;
-    await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-    try { await writeFile(temp, json, { flag: 'wx', mode: 0o600 }); check(); await rename(temp, file); }
-    finally { await rm(temp, { force: true }); }
+    await durablePrivateJson(this.file(id, endpoint), data, check);
     return result;
   }
 }

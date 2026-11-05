@@ -177,7 +177,7 @@ type SendTarget = {
   beingId: string;
   reply?: FeedReply;
 };
-export type TownAPI = Pick<DesktopAPI, 'localApps' | 'associateApp' | 'unlinkApp' | 'town' | 'townLive' | 'onTownLive' | 'reconnectTown' | 'sendTown' | 'townAuth' | 'autoPairTown' | 'cancelTownPair' | 'pairTown' | 'saveTownToken' | 'copyText' | 'openBrowser' | 'openTownLink' | 'localKits' | 'deleteKit' | 'importKit' | 'prepareKit' | 'installKit' | 'discardKit' | 'openKits'>;
+export type TownAPI = Pick<DesktopAPI, 'recoverMarket' | 'onMarketRelease' | 'pendingMarketRelease' | 'kitMarkets' | 'previewMarketRelease' | 'confirmMarketRelease' | 'marketInstallations' | 'manageMarketInstallation' | 'localApps' | 'associateApp' | 'unlinkApp' | 'town' | 'townLive' | 'onTownLive' | 'reconnectTown' | 'sendTown' | 'townAuth' | 'autoPairTown' | 'cancelTownPair' | 'pairTown' | 'saveTownToken' | 'copyText' | 'openBrowser' | 'openTownLink' | 'localKits' | 'deleteKit' | 'importKit' | 'prepareKit' | 'installKit' | 'discardKit' | 'openKits'>;
 export class TownModel extends Store {
   plugins?: import('../../plugins/model').PluginsModel;
   supportsLocalKits = true;

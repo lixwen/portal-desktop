@@ -1,0 +1,20 @@
+import { afterEach, expect, it } from 'vitest';
+import { DesktopControlServer } from '../desktop/main/kits/control-server';
+import { NativeKitController } from '../desktop/main/kits/native-controller';
+const servers: DesktopControlServer[] = [];
+const clients: NativeKitController[] = [];
+afterEach(async () => { clients.splice(0).forEach(c => c.close()); for (const server of servers.splice(0)) await server.close(); });
+it('mutually authenticates native installer and consumer with distinct scoped secrets and enforces consumer method audience', async () => {
+  const context = { owner_id: 'owner', heart_id: 'heart', target_id: 'desktop-B', authority: 'local' as const };
+  const calls: string[] = [];
+  const server = new DesktopControlServer([{ context, controllerToken: 'i'.repeat(40), consumerToken: 'p'.repeat(40) }], async (peer, method) => { calls.push(`${peer.role}:${method}`); return { accepted: true }; }); servers.push(server);
+  const port = await server.listen(0);
+  const installer = await NativeKitController.connect(port, 'i'.repeat(40), context); clients.push(installer);
+  expect(await installer.request('desktop/host/status', {})).toEqual({ accepted: true });
+  const consumer = await NativeKitController.connect(port, 'p'.repeat(40), context, 'kit-consumer'); clients.push(consumer);
+  expect(await consumer.request('desktop/plugins/catalog', {})).toEqual({ accepted: true });
+  await expect(consumer.request('desktop/host/prepare', {})).rejects.toThrow();
+  await expect(NativeKitController.connect(port, 'p'.repeat(40), context)).rejects.toThrow();
+  await expect(NativeKitController.connect(port, 'i'.repeat(40), { ...context, target_id: 'desktop-C' })).rejects.toThrow();
+  expect(calls).toEqual(['kit-controller:desktop/host/status', 'kit-consumer:desktop/plugins/catalog']);
+});

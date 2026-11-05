@@ -28,6 +28,11 @@ try {
   }
   execFileSync('/usr/bin/codesign', ['--verify', '--strict', candidate], { stdio: 'inherit' });
   await rename(candidate, path.join(resources, 'heart-portal'));
+  const installer = path.join(stage, 'kit-installer');
+  await copyFile(path.join(resources, 'kit-installer'), installer);
+  execFileSync('/usr/bin/codesign', ['--force', '--sign', localTest ? '-' : signing.identity, '--identifier', `${signing.clientIdentifier}.kit-installer`, '--options', 'runtime', localTest ? '--timestamp=none' : '--timestamp', ...(process.env.PORTAL_DESKTOP_MAC_KEYCHAIN ? ['--keychain', process.env.PORTAL_DESKTOP_MAC_KEYCHAIN] : []), installer], { stdio: 'inherit' });
+  execFileSync('/usr/bin/codesign', ['--verify', '--strict', installer], { stdio: 'inherit' });
+  await rename(installer, path.join(resources, 'kit-installer'));
   await writeRuntimeBundle();
   console.log(`Signed Portal before generating its manifest (${localTest ? 'local test only; not distributable' : 'upstream Developer ID policy; notarization deferred'}).`);
 } finally {

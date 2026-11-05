@@ -67,6 +67,20 @@ export interface BrowserBounds { x: number; y: number; width: number; height: nu
 export type BrowserAction = 'back' | 'forward' | 'reload' | 'stop' | 'external' | 'close';
 export type ChatEditCommand = 'cut' | 'copy' | 'paste';
 export interface DesktopAPI {
+  home?: import('./home').HomeAPI;
+  openHomePortal?(): Promise<void>;
+  homeKitHostState?(): Promise<import('./home-kit').HomeKitHostState>;
+  startHomeKitHost?(): Promise<import('./home-kit').HomeKitHostState>;
+  stopHomeKitHost?(): Promise<import('./home-kit').HomeKitHostState>;
+  hasPendingMarketRelease?(): Promise<boolean>;
+  onMarketRelease?(callback: () => void): () => void;
+  pendingMarketRelease?: import('./kit-market').KitMarketAPI['pendingMarketRelease'];
+  kitMarkets?: import('./kit-market').KitMarketAPI['kitMarkets'];
+  previewMarketRelease?: import('./kit-market').KitMarketAPI['previewMarketRelease'];
+  confirmMarketRelease?: import('./kit-market').KitMarketAPI['confirmMarketRelease'];
+  marketInstallations?: import('./kit-market').KitMarketAPI['marketInstallations'];
+  recoverMarket?: import('./kit-market').KitMarketAPI['recoverMarket'];
+  manageMarketInstallation?: import('./kit-market').KitMarketAPI['manageMarketInstallation'];
   toolApprovalPending?(): Promise<import('./security').ToolApprovalView | null>;
   answerToolApproval?(id: string, allowed: boolean): Promise<void>;
   onToolApproval?(callback: (value: import('./security').ToolApprovalView | null) => void): () => void;

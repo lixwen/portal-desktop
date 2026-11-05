@@ -1,3 +1,4 @@
+export const PLUGIN_SDK_VERSION = '1.5.0';
 /** Injected into the isolated document before the author's bundle. No host globals. */
 export const PLUGIN_SDK = String.raw`
 (() => {
@@ -74,7 +75,7 @@ export const PLUGIN_SDK = String.raw`
     message.error ? item.reject(new Error(message.error)) : item.resolve(message.value);
   });
   Object.defineProperty(window, 'grove', { value: Object.freeze({
-    apiVersion: 1, sdkVersion: '1.5.0', view, command, slot,
+    apiVersion: 1, sdkVersion: '${PLUGIN_SDK_VERSION}', view, command, slot,
     loadData: () => request('storage.load'),
     saveData: value => request('storage.save', value),
     updateData: value => request('storage.patch', value),

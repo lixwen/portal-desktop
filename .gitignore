@@ -1,5 +1,6 @@
 node_modules/
 .vite/
+/node_modules
 desktop/renderer/.vite/
 out/
 desktop/generated/
@@ -13,4 +14,6 @@ test-results/
 plugins/*/dist/
 output
 resources/runtime-bundle.json
+resources/kit-installer*
+.cache/
 resources/.portal-ready.json

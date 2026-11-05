@@ -12,6 +12,7 @@ import type { PortalState, Settings } from '../../shared/types';
 import { windowsEnvironment, windowsExecutable } from './windows';
 import { saveForegroundRecord } from './foreground-record';
 import { permissionMode } from '../../shared/security';
+import { managedPortalProfile } from '../kits/portal-profile';
 
 export function portalConfig(settings: Settings): string {
   // JSON string escaping is compatible with TOML basic strings, including Windows paths.
@@ -67,9 +68,10 @@ export class PortalSupervisor extends EventEmitter {
     await access(settings.portalBinary, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
     const configPath = settings.portalConfigPath || path.join(this.directory, 'desktop-portal.toml');
-    if (settings.portalConfigPath) await access(configPath, constants.R_OK);
-    else await writeFile(configPath, portalConfig(settings), { mode: 0o600 });
-    this.secrets = [connection.token, connection.relaySecret];
+    const profile = await managedPortalProfile(this.directory, connection);
+    if (settings.portalConfigPath) { if (profile.suffix || profile.prefix) throw new Error('kit_managed_profile_requires_generated_config'); await access(configPath, constants.R_OK); }
+    else await writeFile(configPath, profile.prefix + portalConfig(settings) + profile.suffix, { mode: 0o600 });
+    this.secrets = [connection.token, connection.relaySecret, ...profile.secrets];
     this.run = { settings: { ...settings }, connection: { ...connection }, configPath, environment: { ...environment } };
     this.wanted = true;
     this.crashes = 0;

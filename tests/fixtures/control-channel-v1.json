@@ -1,0 +1,51 @@
+{
+  "secret_utf8": "fixture-controller-secret-32bytes-minimum",
+  "now_unix_ms": 1800000000000,
+  "context": {
+    "owner_id": "owner",
+    "heart_id": "heart",
+    "target_id": "device",
+    "authority": "local"
+  },
+  "hello": {
+    "protocol": "kit-control-hmac-v1",
+    "client_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+    "context": {
+      "owner_id": "owner",
+      "heart_id": "heart",
+      "target_id": "device",
+      "authority": "local"
+    }
+  },
+  "challenge": {
+    "protocol": "kit-control-hmac-v1",
+    "client_nonce": "1111111111111111111111111111111111111111111111111111111111111111",
+    "server_nonce": "2222222222222222222222222222222222222222222222222222222222222222",
+    "expires_at_unix_ms": 1800000030000,
+    "context": {
+      "owner_id": "owner",
+      "heart_id": "heart",
+      "target_id": "device",
+      "authority": "local"
+    },
+    "server_proof": "d5cdb7769006ab9b9ee19196fc2c954bb7222b3f35d4280deeda4183c833d809"
+  },
+  "finish": {
+    "protocol": "kit-control-hmac-v1",
+    "client_proof": "04d68f52a1952b671bfcc196c00a630a1fd78e2bd040dcdfd734b87caca43ddf"
+  },
+  "client_payload_utf8": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"kit/status\",\"params\":{\"fraction\":0.5}}",
+  "server_payload_utf8": "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"authenticated\":true}}",
+  "client_frame": {
+    "protocol": "kit-control-hmac-v1",
+    "sequence": "1",
+    "payload": "eyJqc29ucnBjIjoiMi4wIiwiaWQiOjMsIm1ldGhvZCI6ImtpdC9zdGF0dXMiLCJwYXJhbXMiOnsiZnJhY3Rpb24iOjAuNX19",
+    "mac": "55c361726614deacf5a8e354aed39aed081355d647240ad2ddf2dcc2740dabb1"
+  },
+  "server_frame": {
+    "protocol": "kit-control-hmac-v1",
+    "sequence": "1",
+    "payload": "eyJqc29ucnBjIjoiMi4wIiwiaWQiOjIsInJlc3VsdCI6eyJhdXRoZW50aWNhdGVkIjp0cnVlfX0=",
+    "mac": "9c9cc5be4494718765eed33522ebc9e4ed143afa0b68e1bbc83a23996d0e3fc0"
+  }
+}

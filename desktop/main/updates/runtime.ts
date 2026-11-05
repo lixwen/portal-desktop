@@ -6,10 +6,11 @@ import type { Connection } from '../chat/connection';
 import type { Settings } from '../../shared/types';
 import { readPortalSample, readPortalReady } from '../portal/status';
 import { portalConfig } from '../portal/supervisor';
+import { managedPortalConfig } from '../kits/portal-profile';
 import { parse as parseToml } from 'smol-toml';
 import type { InstallIntent } from './client-install';
 
-export interface RuntimeBundle { schema: 1; id: string; clientVersion: string; portalVersion: string; sha256: string; platform: string; arch: string }
+export interface RuntimeBundle { schema: 1 | 2; id: string; clientVersion: string; portalVersion: string; sha256: string; installerSha256?: string; kitCapabilities?: unknown; platform: string; arch: string }
 interface Journal { schema: 1; previous: Service; candidate: Service; enabled: boolean; previousPlist?: string; external?: Service[] }
 export interface RuntimeUpdateResult { phase: 'current' | 'updated' | 'skipped' | 'error'; message: string; portalVersion?: string }
 export class RuntimeRollbackError extends Error {}
@@ -26,11 +27,12 @@ export function compareVersions(left: string, right: string) {
 }
 export async function loadRuntimeBundle(resources: string): Promise<{ bundle: RuntimeBundle; binary: string }> {
   const bundle = JSON.parse(await readFile(path.join(resources, 'runtime-bundle.json'), 'utf8')) as RuntimeBundle;
-  if (bundle.schema !== 1 || bundle.platform !== process.platform || bundle.arch !== process.arch ||
+  if (![1, 2].includes(bundle.schema) || bundle.platform !== process.platform || bundle.arch !== process.arch ||
       !/^[a-f0-9]{64}$/.test(bundle.sha256) || !/^[a-f0-9]{64}$/.test(bundle.id)) throw new Error('安装包中的 Portal 版本清单无效。');
   compareVersions(bundle.portalVersion, bundle.portalVersion);
   const binary = path.join(resources, process.platform === 'win32' ? 'heart-portal.exe' : 'heart-portal');
   if (digest(await readFile(binary)) !== bundle.sha256) throw new Error('安装包内 Portal 校验失败，旧服务未修改。');
+  if (bundle.schema === 2 && (!/^[a-f0-9]{64}$/.test(bundle.installerSha256 || '') || digest(await readFile(path.join(resources, process.platform === 'win32' ? 'kit-installer.exe' : 'kit-installer'))) !== bundle.installerSha256)) throw new Error('安装包内 Kit 安装器校验失败，旧服务未修改。');
   return { bundle, binary };
 }
 
@@ -129,7 +131,7 @@ export class RuntimeUpdater {
       fingerprint: fingerprint({ ...settings, portalConfigPath: generatedConfig ? undefined : config }, connection) };
     await mkdir(root, { recursive: true, mode: 0o700 });
     try {
-      if (generatedConfig) await atomic(config, portalConfig(settings));
+      if (generatedConfig) await atomic(config, await managedPortalConfig(this.directory, settings, connection, portalConfig));
       const target = path.join(root, this.platform === 'win32' ? 'heart-portal.exe' : 'heart-portal');
       await copyFile(binary, target); await chmod(target, 0o700);
       if (digest(await readFile(target)) !== bundle.sha256) throw new Error('暂存 Portal 校验失败。');

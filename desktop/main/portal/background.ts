@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { redact, type Connection } from '../chat/connection';
 import { portalArguments, portalConfig } from './supervisor';
+import { managedPortalConfig, homeReservationPrefix } from '../kits/portal-profile';
 import { readPortalSample, readPortalReady, portalSampleState } from './status';
 import type { BackgroundState, PortalState, Settings } from '../../shared/types';
 import { permissionMode } from '../../shared/security';
@@ -364,7 +365,7 @@ if ([string]$t.State -eq 'Running' -and (Test-Path -LiteralPath $pidFile)) {
       await this.load(previous); return this.refresh();
     }
     await access(settings.portalBinary, this.platform === 'win32' ? constants.F_OK : constants.X_OK);
-    if (settings.portalConfigPath) await access(settings.portalConfigPath, constants.R_OK);
+    if (settings.portalConfigPath) { if (await homeReservationPrefix(this.directory)) throw new Error('home_native_gate_requires_generated_config'); await access(settings.portalConfigPath, constants.R_OK); }
     const root = path.join(this.runtimeDirectory, randomUUID());
     await mkdir(root, { recursive: true, mode: 0o700 });
     let registrationChanged = false;
@@ -379,7 +380,7 @@ if ([string]$t.State -eq 'Running' -and (Test-Path -LiteralPath $pidFile)) {
       if (!(await readFile(binary)).equals(sourceBytes)) throw new Error('Portal 引擎在启动准备期间发生变化，请重试。');
       const config = settings.portalConfigPath || path.join(root, 'portal.toml');
       service.configPath = config; service.generatedConfig = !settings.portalConfigPath; service.cwd = settings.workspace;
-      if (!settings.portalConfigPath) await atomic(config, portalConfig(settings));
+      if (!settings.portalConfigPath) await atomic(config, await managedPortalConfig(this.directory, settings, connection, portalConfig));
       if (this.platform === 'darwin') {
         await atomic(path.join(root, 'connection.url'), connection.link);
         await atomic(path.join(root, 'run.sh'), unixRunner(root, config, settings, { HEART_PORTAL_CLIENT_FILE: path.join(this.directory, '.portal-client.json') }));

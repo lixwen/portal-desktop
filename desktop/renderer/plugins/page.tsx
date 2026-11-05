@@ -44,7 +44,7 @@ export function PluginCard({ model, plugin }: { model: PluginsModel; plugin: imp
   return <article className="plugin-card">
     <h3>{plugin.manifest.name} <span className="mini-tag">Plugin</span></h3>
     <p>{plugin.manifest.description}</p>
-    <p className="card-meta">{plugin.manifest.author} · v{plugin.manifest.version} · {plugin.source.kind === 'grove' ? 'Grove' : '本地导入'} · {plugin.enabled ? '已启用' : '已停用'}</p>
+    <p className="card-meta">{plugin.manifest.author} · v{plugin.manifest.version} · {plugin.source.kind === 'grove' ? 'Grove' : plugin.source.kind === 'kit' ? 'Kit 安装器（独立来源）' : '本地导入'} · {plugin.enabled ? '已启用' : '已停用'}</p>
     <p className="field-help">能力：{['页面、主题', ...plugin.manifest.capabilities.map(c => PLUGIN_CAPABILITIES[c])].join('；')}</p>
     <div className="plugin-actions">
       <div className="plugin-view-list">
@@ -73,6 +73,8 @@ export function PluginCard({ model, plugin }: { model: PluginsModel; plugin: imp
         <span>插件管理</span>
         <div>
           <button className="secondary" disabled={plugins.busy} onClick={() => void plugins.act(() => plugins.api!.setEnabled(plugin.manifest.id, !plugin.enabled))}>{plugin.enabled ? '停用' : '启用'}</button>
+          {plugins.api?.update && plugin.source.kind !== 'kit' && <button className="secondary" disabled={plugins.busy} onClick={() => void plugins.act(() => plugins.api!.update!(plugin.manifest.id))}>更新</button>}
+          {plugins.api?.restoreUpdate && plugin.source.kind !== 'kit' && <button className="secondary" disabled={plugins.busy} onClick={() => void plugins.act(() => plugins.api!.restoreUpdate!(plugin.manifest.id))}>恢复上一版本</button>}
           <button className="secondary danger-action" disabled={plugins.busy} onClick={() => void plugins.act(() => plugins.api!.remove(plugin.manifest.id))}>卸载</button>
         </div>
       </div>
@@ -105,7 +107,7 @@ export function PluginSlots({ model }: { model: PluginsModel }) {
   </div>;
 }
 
-export function PluginFrame({ api, model, id, view, command, slot, theme, title }: { api: Pick<DesktopPluginAPI, 'open' | 'close' | 'call' | 'onEvent'>; model: Pick<PluginsModel, 'prepareSession' | 'showCommands' | 'compose' | 'applyUI'>; id: string; view: string; command?: string; slot?: string; theme: 'light' | 'dark'; title: string }) {
+export function PluginFrame({ api, model, id, view, command, slot, theme, title }: { api: Pick<DesktopPluginAPI, 'open' | 'close' | 'call' | 'onEvent' | 'ready'>; model: Pick<PluginsModel, 'prepareSession' | 'showCommands' | 'compose' | 'applyUI'>; id: string; view: string; command?: string; slot?: string; theme: 'light' | 'dark'; title: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [session, setSession] = useState<PluginSession>();
   const [error, setError] = useState('');
@@ -138,6 +140,7 @@ export function PluginFrame({ api, model, id, view, command, slot, theme, title 
       }
       const respond = (value: unknown) => { if (active) send(value); };
       if (message.type === 'grove:ready') {
+        try { await api.ready?.(session.token); } catch (error) { setError(errorText(error)); return; }
         clearTimeout(timer); setReady(true);
         respond({ type: 'grove:theme', channel: session.token, theme: currentTheme.current }); return;
       }

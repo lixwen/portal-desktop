@@ -22,3 +22,7 @@ See [Home authentication](KIT_HOME_AUTH.md), [native host setup](KIT_HOME_NATIVE
 TypeScript checking passed. The focused Kit/Home client/plugin-agent suite contains 122 scenarios. Initial checking passed 121; one stale Home host test double lacked the new `nativeFeatures()` method. The double now supplies an empty feature list, retaining the original behavior assertions. The focused rerun passed all four Home host scenarios; all 122 distinct related scenarios have now passed.
 
 This publication does not rebuild Rust runtimes, sign an installer, run native Electron GUI checks or repeat real Home/Heart business calls. Historical evidence is not represented as new acceptance.
+
+## Local development startup (2026-11-05)
+
+`npm start` was verified with the reviewed frozen macOS Portal/Installer pair, an isolated client profile and the DEV Home URL. The actual Electron main window rendered. Vite keeps `ws` external so Node preserves its optional native-module fallback instead of failing during startup on missing `bufferutil`. This startup check does not authenticate a Home session or repeat Heart business acceptance; the normal installed client remains independent.
